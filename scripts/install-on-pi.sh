@@ -51,6 +51,7 @@ cat > "$BIN_DIR/audacity" <<'EOF'
 APP="$HOME/.local/bin/Audacity.AppImage"
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
 export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-gl}"
+export LSP_WS_LIB_GLXSURFACE="${LSP_WS_LIB_GLXSURFACE:-off}"
 if command -v fusermount3 >/dev/null 2>&1; then
   exec "$APP" "$@"
 else
