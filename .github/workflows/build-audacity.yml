@@ -80,26 +80,28 @@ jobs:
       # Optymalizacja pod Cortex-A76 (Raspberry Pi 5 / BCM2712)
       #   -mcpu=cortex-a76  = armv8.2-a + crc + lse + fp16 + dotprod + rcpc + tuning A76
       #   -O3               = pełna wektoryzacja (DSP/FFT/efekty)
-      #   -fopenmp          = równoległy spektrogram (Audacity ma #ifdef _OPENMP)
       #   -fomit-frame-pointer / -pipe = mniejszy kod, szybsza kompilacja
+      # NIE używamy -fopenmp: Audacity ma w SpectrumCache.cpp błąd w górze
+      #   ( #pragma omp parallel for przed QtConcurrent::blockingMap, nie przed for )
+      #   -> z _OPENMP kompilacja pada. Spektrogram i tak jest równoległy przez QtConcurrent.
       # 4K page size NIE wymaga żadnych flag kompilatora (domyślne ELF max-page-size=64K
       # działa pod 4K/16K/64K jądrem). NIE używamy -march=native (niedeterministyczne).
       # ------------------------------------------------------------------
       - name: 'Ustaw flagi kompilatora (Cortex-A76)'
         run: |
-          OPT="-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer -fopenmp"
-          LDF="-fopenmp"
+          OPT="-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer"
+          LDF=""
           if [ "${{ github.event.inputs.lto }}" = "on" ]; then
             OPT="$OPT -flto -fno-fat-lto-objects"
-            LDF="$LDF -flto"
+            LDF="-flto"
             echo "AR=/usr/bin/gcc-ar" >> "$GITHUB_ENV"
             echo "RANLIB=/usr/bin/gcc-ranlib" >> "$GITHUB_ENV"
           fi
           echo "CFLAGS=$OPT"   >> "$GITHUB_ENV"
           echo "CXXFLAGS=$OPT" >> "$GITHUB_ENV"
-          echo "LDFLAGS=$LDF"  >> "$GITHUB_ENV"
+          if [ -n "$LDF" ]; then echo "LDFLAGS=$LDF" >> "$GITHUB_ENV"; fi
           echo "Zastosowane flagi: $OPT"
-          echo "LDFLAGS: $LDF"
+          [ -n "$LDF" ] && echo "LDFLAGS: $LDF"
 
       - name: 'Zainstaluj zależności buildowe (apt, natywne arm64)'
         run: |
@@ -212,7 +214,7 @@ jobs:
             **Build wykonany w chmurze** na natywnym runnerze arm64 GitHub Actions (`ubuntu-24.04-arm`).
 
             - Architektura: **aarch64 (arm64)**, target: **Cortex-A76** (BCM2712)
-            - Flagi: `-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer -fopenmp`${{ github.event.inputs.lto == 'on' && ' + LTO' || '' }}
+            - Flagi: `-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer`${{ github.event.inputs.lto == 'on' && ' + LTO' || '' }} (bez `-fopenmp` — błąd upstream w SpectrumCache.cpp)
             - Qt 6.10.1 · GCC (systemowy) · CMake + Ninja · ccache
             - Page size: **4K** (domyślny kernel Raspberry Pi OS — brak flag potrzebnych)
 
