@@ -1,8 +1,13 @@
 # ============================================================================
-# Audacity 4 Beta — build dla Raspberry Pi 5 (aarch64, Cortex-A76)
+# Audacity 4 (master) — build dla Raspberry Pi 5 (aarch64, Cortex-A76)
 # ----------------------------------------------------------------------------
 # Wszystko dzieje się W CHMURZE na natywnym runnerze arm64 GitHub Actions.
 # Raspberry Pi 5 to tylko URZĄDZENIE DOCELOWE (page size 4K — domyślny kernel RPi OS).
+#
+# DOMYŚLNIE budujemy 'master' (najnowszy kod 4.0.0, nowy system zależności extdeps).
+# Tag Audacity-4.0.0-beta-2 NIE buduje się: jego SetupDependencies.cmake pobiera
+# z musescore/muse_deps/main stare ścieżki (np. wxwidgets/3.1.3.9), które po
+# restrukturyzacji muse_deps zwracają 404 -> "Unknown CMake command wxwidgets_Populate".
 #
 # Pipeline bazuje na oficjalnym CI Audacity (au4_build_linux.yml), ale:
 #   * pomija buildscripts/ci/linux/setup.sh (pobiera cmake/ninja x86_64-only,
@@ -18,9 +23,9 @@ on:
   workflow_dispatch:
     inputs:
       audacity_ref:
-        description: 'Ref Audacity do zbudowania (tag / gałąź / commit)'
+        description: 'Ref Audacity do zbudowania (tag / gałąź / commit). UWAGA: beta-2 ma zepsuty stary system zależności (muse_deps zmieniło strukturę) — używaj master'
         required: false
-        default: 'Audacity-4.0.0-beta-2'
+        default: 'master'
       build_mode:
         description: 'Tryb buildu (wpływa na nazwę artefaktu)'
         required: false
@@ -110,7 +115,8 @@ jobs:
             libxrandr2 libxtst-dev libdrm-dev libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
             libxcb-xkb-dev libxcb-shape0 libxkbcommon-dev libvulkan-dev \
-            libjack-jackd2-dev gettext python3-pip uuid-dev xkb-data m4 \
+            libjack-jackd2-dev libgtk2.0-dev gettext python3-pip uuid-dev xkb-data m4 \
+            ffmpeg libavcodec-dev libavformat-dev libswscale-dev \
             ccache ninja-build cmake qemu-user-static
           echo "--- narzędzia ---"
           cmake --version | head -1
