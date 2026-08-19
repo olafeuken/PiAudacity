@@ -101,7 +101,7 @@ jobs:
           echo "CXXFLAGS=$OPT" >> "$GITHUB_ENV"
           if [ -n "$LDF" ]; then echo "LDFLAGS=$LDF" >> "$GITHUB_ENV"; fi
           echo "Zastosowane flagi: $OPT"
-          [ -n "$LDF" ] && echo "LDFLAGS: $LDF"
+          if [ -n "$LDF" ]; then echo "LDFLAGS: $LDF"; fi
 
       - name: 'Zainstaluj zależności buildowe (apt, natywne arm64)'
         run: |
