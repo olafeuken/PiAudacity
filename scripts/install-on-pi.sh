@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Instalacja Audacity 4 Beta (build Pi5) na Raspberry Pi z GitHub Release
+# Pobiera najnowszy draft Release z repo olafeuken/PiAudacity, instaluje
+# AppImage do ~/.local/bin i tworzy wpis w menu KDE Plasma.
+# Uruchomienie:  bash scripts/install-on-pi.sh
+# ============================================================================
+set -euo pipefail
+
+REPO="olafeuken/PiAudacity"
+APP_NAME="Audacity"
+BIN_DIR="$HOME/.local/bin"
+APP_DIR="$HOME/.local/share/applications"
+ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "$TMP_DIR"' EXIT
+
+echo "==> Pobieranie informacji o release z GitHub ($REPO) ..."
+# gh CLI (jeśli zalogowany) albo curl do API
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+  ASSET_URL="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' | head -1)"
+else
+  ASSET_URL="$(curl -s "https://api.github.com/repos/$REPO/releases" \
+    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((a["browser_download_url"] for r in d for a in r.get("assets",[]) if a["name"].endswith(".AppImage")), ""))')"
+fi
+
+if [ -z "$ASSET_URL" ]; then
+  echo "!! Nie znaleziono AppImage w release. Opublikuj najpierw draft Release (Actions)." >&2
+  exit 1
+fi
+
+FILE="$(basename "$ASSET_URL")"
+echo "==> Pobieranie: $ASSET_URL"
+curl -L --fail -o "$TMP_DIR/$FILE" "$ASSET_URL"
+
+echo "==> Instalacja do $BIN_DIR ..."
+mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR"
+install -m 0755 "$TMP_DIR/$FILE" "$BIN_DIR/$APP_NAME.AppImage"
+
+# Wrapper: uruchamia AppImage (obsługuje brak FUSE przez --appimage-extract-and-run)
+cat > "$BIN_DIR/audacity" <<'EOF'
+#!/usr/bin/env bash
+APP="$HOME/.local/bin/Audacity.AppImage"
+if command -v fusermount3 >/dev/null 2>&1; then
+  exec "$APP" "$@"
+else
+  exec "$APP" --appimage-extract-and-run "$@"
+fi
+EOF
+chmod 0755 "$BIN_DIR/audacity"
+
+echo "==> Wpis w menu KDE ..."
+cat > "$APP_DIR/audacity.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Audacity 4 (Pi5)
+GenericName=Edytor dźwięku
+Comment=Audacity 4 Beta — build aarch64 pod Raspberry Pi 5
+Exec=$BIN_DIR/audacity %F
+Icon=audacity
+Terminal=false
+Categories=AudioVideo;Audio;AudioEditing;
+StartupWMClass=audacity
+EOF
+
+# Ikona aplikacji (z oficjalnego repo Audacity)
+curl -sL --fail -o "$ICON_DIR/audacity.svg" \
+  "https://raw.githubusercontent.com/audacity/audacity/master/buildscripts/packaging/Linux%2BBSD/aup4.svg" \
+  || true
+
+# Odświeżenie baz KDE
+if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 >/dev/null 2>&1 || true; fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true; fi
+
+echo ""
+echo "OK. Uruchomienie:"
+echo "    audacity"
+echo "albo z menu KDE:  Audacity 4 (Pi5)"

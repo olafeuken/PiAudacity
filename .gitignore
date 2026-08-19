@@ -1,0 +1,8 @@
+# lokalne artefakty
+build/
+build.release/
+build.install/
+build.artifacts/
+.ccache/
+*.AppImage
+*.log
