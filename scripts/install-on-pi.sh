@@ -16,10 +16,20 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "==> Pobieranie informacji o release z GitHub ($REPO) ..."
-# gh CLI (tylko jeśli token faktycznie działa) albo curl do API
+FILE=""
+# gh CLI (tylko jeśli token faktycznie działa) — obsługuje też draft Release
+# (drafty nie dają publicznego browser_download_url, dlatego pobieramy przez API)
 if command -v gh >/dev/null 2>&1 && gh api user >/dev/null 2>&1; then
-  ASSET_URL="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' | head -1)"
-else
+  FILE="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .name' | head -1)"
+  if [ -n "$FILE" ]; then
+    ASSET_ID="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .id' | head -1)"
+    echo "==> Pobieranie (gh, draft-safe): $FILE"
+    gh api -H "Accept: application/octet-stream" "repos/$REPO/releases/assets/$ASSET_ID" > "$TMP_DIR/$FILE"
+  fi
+fi
+
+# Fallback: publiczny URL (release opublikowany / brak gh)
+if [ -z "$FILE" ] || [ ! -s "$TMP_DIR/$FILE" ]; then
   ASSET_URL="$(curl -s "https://api.github.com/repos/$REPO/releases" \
     | python3 -c '
 import sys, json
@@ -31,16 +41,17 @@ try:
 except Exception:
     print("")
 ')"
+  if [ -n "$ASSET_URL" ]; then
+    FILE="$(basename "$ASSET_URL")"
+    echo "==> Pobieranie (curl): $ASSET_URL"
+    curl -L --fail -o "$TMP_DIR/$FILE" "$ASSET_URL"
+  fi
 fi
 
-if [ -z "$ASSET_URL" ]; then
+if [ -z "$FILE" ] || [ ! -s "$TMP_DIR/$FILE" ]; then
   echo "!! Nie znaleziono AppImage w release. Opublikuj najpierw draft Release (Actions)." >&2
   exit 1
 fi
-
-FILE="$(basename "$ASSET_URL")"
-echo "==> Pobieranie: $ASSET_URL"
-curl -L --fail -o "$TMP_DIR/$FILE" "$ASSET_URL"
 
 echo "==> Instalacja do $BIN_DIR ..."
 mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR"
