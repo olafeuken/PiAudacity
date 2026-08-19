@@ -61,9 +61,9 @@ install -m 0755 "$TMP_DIR/$FILE" "$BIN_DIR/$APP_NAME.AppImage"
 cat > "$BIN_DIR/audacity" <<'EOF'
 #!/usr/bin/env bash
 APP="$HOME/.local/bin/Audacity.AppImage"
-# Natywny Wayland (KDE Plasma 6); ';xcb' = automatyczny fallback do XWayland gdy wayland nie zadziala
-export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
-# Sprzetowy render QML (GPU V3D) — najlepsze wykorzystanie grafiki; brak GL = auto fallback
+# X11 (XWayland) — świadomy wybór: prebuilt Qt ma zepsuty plugin wayland, wiec X11 to szybka/pewna droga
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+# Sprzetowy render (GPU V3D) — najlepsze wykorzystanie grafiki
 export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-gl}"
 if command -v fusermount3 >/dev/null 2>&1; then
   exec "$APP" "$@"

@@ -76,13 +76,6 @@ jobs:
           submodules: recursive
           path: audacity
 
-      - name: 'Pobierz nasze skrypty (PiAudacity)'
-        uses: actions/checkout@v7
-        with:
-          path: piaudacity
-        # Nasz repo zawiera scripts/build-qt-a76.sh — workflow pobiera tylko audacity/audacity,
-        # więc bez tego checkoutu skrypt nie istnieje na runnerze (błąd: No such file).
-
       # ------------------------------------------------------------------
       # Optymalizacja pod Cortex-A76 (Raspberry Pi 5 / BCM2712)
       #   -mcpu=cortex-a76  = armv8.2-a + crc + lse + fp16 + dotprod + rcpc + tuning A76
@@ -144,23 +137,19 @@ jobs:
             ccache-${{ runner.arch }}-${{ github.event.inputs.audacity_ref }}
             ccache-${{ runner.arch }}
 
-      - name: 'Buduj Qt 6.10.1 ze źródeł (Wayland + A76)'
-        run: |
-          bash piaudacity/scripts/build-qt-a76.sh
-          QP="$HOME/Qt/6.10.1/gcc_arm64"
-          {
-            echo "Qt6_DIR=$QP"
-            echo "CMAKE_PREFIX_PATH=$QP"
-            echo "QT_ROOT_DIR=$QP"
-            echo "QT_PLUGIN_PATH=$QP/plugins"
-            echo "PKG_CONFIG_PATH=$QP/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
-            echo "LD_LIBRARY_PATH=$QP/lib:${LD_LIBRARY_PATH:-}"
-            echo "PATH=$QP/bin:${PATH}"
-          } >> "$GITHUB_ENV"
-          echo "Qt zbudowane w $QP"
-        # Qt budowane ZE ŹRÓDEŁ: prebuilt aqt ma zepsutą inicjalizację wayland
-        # (libqwayland ładuje się, ale Qt spada na xcb/XWayland). Build ze źródeł
-        # daje DZIAŁAJĄCY natywny wayland + Qt w pełni pod -mcpu=cortex-a76.
+      - name: 'Zainstaluj Qt 6.10.1 (aarch64, prebuilt)'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.1'
+          host: 'linux_arm64'
+          target: 'desktop'
+          arch: 'linux_gcc_arm64'
+          modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets qtgraphs qtquick3d'
+          cache: true
+        # Prebuilt Qt = szybki build (~25 min). Jego plugin wayland jest zepsuty w runtime,
+        # więc aplikacja działa przez XWayland (xcb) — ŚWIADOMA decyzja użytkownika: zostajemy przy X11.
+        # Opcjonalnie (wolny build ~3-4h, działa natywny wayland + Qt pod A76):
+        #   scripts/build-qt-a76.sh (z checkoutem piaudacity).
 
       - name: 'Przygotuj build_tools/environment.sh (oficjalny setup.sh pominięty — x86-only)'
         run: |
