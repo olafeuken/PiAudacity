@@ -74,18 +74,22 @@ EOF
 chmod 0755 "$BIN_DIR/audacity"
 
 echo "==> Wpis w menu KDE ..."
-cat > "$APP_DIR/audacity.desktop" <<EOF
+# Nazwa pliku MUSI być taka, jakiej szuka Audacity (desktopFileName) — inaczej
+# KWin pokazuje generyczną ikonę X11 w pasku tytułu okna XWayland.
+cat > "$APP_DIR/org.audacityteam.Audacity4portablenightly.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Audacity 4 (Pi5)
 GenericName=Edytor dźwięku
-Comment=Audacity 4 Beta — build aarch64 pod Raspberry Pi 5
+Comment=Audacity 4 (master) — build aarch64 pod Raspberry Pi 5
 Exec=$BIN_DIR/audacity %F
 Icon=audacity
 Terminal=false
 Categories=AudioVideo;Audio;AudioEditing;
-StartupWMClass=audacity
+StartupWMClass=audacity4portablenightly
 EOF
+# Usuń ewentualny stary wpis o innej nazwie (duplikat w menu)
+rm -f "$APP_DIR/audacity.desktop"
 
 # Ikona aplikacji (z oficjalnego repo Audacity)
 curl -sL --fail -o "$ICON_DIR/audacity.svg" \
