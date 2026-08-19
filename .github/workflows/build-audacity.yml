@@ -1,33 +1,14 @@
-# ============================================================================
-# Audacity 4 (master) — build dla Raspberry Pi 5 (aarch64, Cortex-A76)
-# ----------------------------------------------------------------------------
-# Wszystko dzieje się W CHMURZE na natywnym runnerze arm64 GitHub Actions.
-# Raspberry Pi 5 to tylko URZĄDZENIE DOCELOWE (page size 4K — domyślny kernel RPi OS).
-#
-# DOMYŚLNIE budujemy 'master' (najnowszy kod 4.0.0, nowy system zależności extdeps).
-# Tag Audacity-4.0.0-beta-2 NIE buduje się: jego SetupDependencies.cmake pobiera
-# z musescore/muse_deps/main stare ścieżki (np. wxwidgets/3.1.3.9), które po
-# restrukturyzacji muse_deps zwracają 404 -> "Unknown CMake command wxwidgets_Populate".
-#
-# Pipeline bazuje na oficjalnym CI Audacity (au4_build_linux.yml), ale:
-#   * pomija buildscripts/ci/linux/setup.sh (pobiera cmake/ninja x86_64-only,
-#     co NA arm64 runnerze jest zepsute) — wszystko instalowane z apt (natywne arm64)
-#   * wstrzykuje flagi optymalizacyjne pod Cortex-A76 przez env CFLAGS/CXXFLAGS/LDFLAGS
-#     (cmake inicjalizuje z nich flagi kompilatora/linkera)
-#
-# Uruchomienie: Actions -> "Audacity 4 Beta — build aarch64" -> Run workflow
-# ============================================================================
-name: 'Audacity 4 Beta — build aarch64 (Raspberry Pi 5)'
+name: 'Audacity 4 — build aarch64 (Raspberry Pi 5)'
 
 on:
   workflow_dispatch:
     inputs:
       audacity_ref:
-        description: 'Ref Audacity do zbudowania (tag / gałąź / commit). UWAGA: beta-2 ma zepsuty stary system zależności (muse_deps zmieniło strukturę) — używaj master'
+        description: 'Ref Audacity do zbudowania'
         required: false
         default: 'master'
       build_mode:
-        description: 'Tryb buildu (wpływa na nazwę artefaktu)'
+        description: 'Tryb buildu'
         required: false
         default: 'nightly_build'
         type: choice
@@ -36,7 +17,7 @@ on:
           - testing_build
           - stable_build
       lto:
-        description: 'LTO (większa wydajność, cięższy/ryzykowny link — włącz PO udanym buildzie bez LTO)'
+        description: 'LTO'
         required: false
         default: 'off'
         type: choice
@@ -44,7 +25,7 @@ on:
           - 'off'
           - 'on'
       create_release:
-        description: 'Utwórz draft Release z gotowym AppImage'
+        description: 'Utwórz Release z AppImage'
         required: false
         default: 'true'
         type: choice
@@ -57,18 +38,18 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write # wymagane do utworzenia Release
+  contents: write
 
 jobs:
   build:
-    name: 'Build aarch64 (Cortex-A76 / RPi5)'
-    runs-on: ubuntu-24.04-arm # natywny arm64 runner (GA, darmowy w repo publicznych)
+    name: 'Build aarch64'
+    runs-on: ubuntu-24.04-arm
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_MAXSIZE: 1G
 
     steps:
-      - name: 'Pobierz źródła Audacity (ref: ${{ github.event.inputs.audacity_ref }})'
+      - name: 'Pobierz źródła Audacity'
         uses: actions/checkout@v7
         with:
           repository: audacity/audacity
@@ -76,18 +57,7 @@ jobs:
           submodules: recursive
           path: audacity
 
-      # ------------------------------------------------------------------
-      # Optymalizacja pod Cortex-A76 (Raspberry Pi 5 / BCM2712)
-      #   -mcpu=cortex-a76  = armv8.2-a + crc + lse + fp16 + dotprod + rcpc + tuning A76
-      #   -O3               = pełna wektoryzacja (DSP/FFT/efekty)
-      #   -fomit-frame-pointer / -pipe = mniejszy kod, szybsza kompilacja
-      # NIE używamy -fopenmp: Audacity ma w SpectrumCache.cpp błąd w górze
-      #   ( #pragma omp parallel for przed QtConcurrent::blockingMap, nie przed for )
-      #   -> z _OPENMP kompilacja pada. Spektrogram i tak jest równoległy przez QtConcurrent.
-      # 4K page size NIE wymaga żadnych flag kompilatora (domyślne ELF max-page-size=64K
-      # działa pod 4K/16K/64K jądrem). NIE używamy -march=native (niedeterministyczne).
-      # ------------------------------------------------------------------
-      - name: 'Ustaw flagi kompilatora (Cortex-A76)'
+      - name: 'Ustaw flagi kompilatora'
         run: |
           OPT="-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer"
           LDF=""
@@ -100,33 +70,22 @@ jobs:
           echo "CFLAGS=$OPT"   >> "$GITHUB_ENV"
           echo "CXXFLAGS=$OPT" >> "$GITHUB_ENV"
           if [ -n "$LDF" ]; then echo "LDFLAGS=$LDF" >> "$GITHUB_ENV"; fi
-          echo "Zastosowane flagi: $OPT"
-          if [ -n "$LDF" ]; then echo "LDFLAGS: $LDF"; fi
 
-      - name: 'Zainstaluj zależności buildowe (apt, natywne arm64)'
+      - name: 'Zainstaluj zależności buildowe'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             desktop-file-utils file git lcov pkg-config software-properties-common \
-            unzip p7zip-full \
-            curl libasound2-dev libfontconfig1-dev libfreetype6-dev libfreetype6 \
-            libgl1-mesa-dev libnss3-dev libpulse-dev libsndfile1-dev libudev-dev \
-            make wget \
-            libcups2 libdbus-1-3 libegl1-mesa-dev libpq-dev libssl-dev \
-            libxcomposite-dev libxcursor-dev libxi-dev libxkbcommon-x11-0 \
+            unzip p7zip-full curl libasound2-dev libfontconfig1-dev libfreetype6-dev \
+            libfreetype6 libgl1-mesa-dev libnss3-dev libpulse-dev libsndfile1-dev \
+            libudev-dev make wget libcups2 libdbus-1-3 libegl1-mesa-dev libpq-dev \
+            libssl-dev libxcomposite-dev libxcursor-dev libxi-dev libxkbcommon-x11-0 \
             libxrandr2 libxtst-dev libdrm-dev libxcb-icccm4 libxcb-image0 \
             libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 \
             libxcb-xkb-dev libxcb-shape0 libxkbcommon-dev libvulkan-dev \
             libjack-jackd2-dev libgtk2.0-dev gettext python3-pip uuid-dev xkb-data m4 \
             ffmpeg libavcodec-dev libavformat-dev libswscale-dev \
-            libwayland-dev libxkbcommon-dev libxkbcommon-x11-dev libgles2-mesa-dev \
-            libglib2.0-dev libdbus-1-dev libicu-dev libpcre2-dev libzstd-dev \
             ccache ninja-build cmake qemu-user-static
-          echo "--- narzędzia ---"
-          cmake --version | head -1
-          ninja --version
-          gcc --version | head -1
-          qemu-aarch64-static --version | head -1
 
       - name: 'Przywróć cache ccache'
         uses: actions/cache@v6
@@ -137,7 +96,7 @@ jobs:
             ccache-${{ runner.arch }}-${{ github.event.inputs.audacity_ref }}
             ccache-${{ runner.arch }}
 
-      - name: 'Zainstaluj Qt 6.10.1 (aarch64, prebuilt)'
+      - name: 'Zainstaluj Qt 6.10.1 (aarch64)'
         uses: jurplel/install-qt-action@v4
         with:
           version: '6.10.1'
@@ -146,92 +105,58 @@ jobs:
           arch: 'linux_gcc_arm64'
           modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets qtgraphs qtquick3d'
           cache: true
-        # Prebuilt Qt = szybki build (~25 min). Jego plugin wayland jest zepsuty w runtime,
-        # więc aplikacja działa przez XWayland (xcb) — ŚWIADOMA decyzja użytkownika: zostajemy przy X11.
-        # Opcjonalnie (wolny build ~3-4h, działa natywny wayland + Qt pod A76):
-        #   scripts/build-qt-a76.sh (z checkoutem piaudacity).
 
-      - name: 'Przygotuj build_tools/environment.sh (oficjalny setup.sh pominięty — x86-only)'
+      - name: 'Przygotuj środowisko'
         run: |
           mkdir -p "$HOME/build_tools"
           printf '%s\n' \
             '# Minimalne srodowisko build_tools' \
-            '# (oficjalny setup.sh pominiety - pobiera cmake/ninja x86_64-only)' \
             > "$HOME/build_tools/environment.sh"
           chmod +x "$HOME/build_tools/environment.sh"
 
-      - name: 'Skonfiguruj parametry buildu (build.artifacts/env)'
+      - name: 'Skonfiguruj parametry buildu'
         working-directory: audacity
         run: |
           cmake -DEVENT=workflow_dispatch \
                 -DBUILD_MODE=${{ github.event.inputs.build_mode }} \
                 -DARTIFACT_INFO="Lin_aarch64_pi5" \
                 -P buildscripts/ci/common/ci_configure.cmake
-          echo "--- build.artifacts/env ---"
-          cat build.artifacts/env/*.env
 
-      - name: 'Buduj (Release / AppImage)'
+      - name: 'Buduj'
         working-directory: audacity
         run: |
           source $HOME/build_tools/environment.sh
           cmake -DCRASH_REPORT_URL="" -P buildscripts/ci/linux/ci_build.cmake
 
-      - name: 'Pokaz statystyki ccache'
-        run: ccache -sv
-
-      - name: 'Pakuj (AppImage, aarch64)'
+      - name: 'Pakuj (AppImage)'
         working-directory: audacity
         run: |
           source $HOME/build_tools/environment.sh
           cmake -DPACKARCH=aarch64 -P buildscripts/ci/linux/package.cmake
-          echo "--- build.artifacts ---"
-          ls -lh build.artifacts/
 
-      - name: 'Smoke test — AppImage i binarka (aarch64 ELF)'
+      - name: 'Weryfikacja AppImage'
         run: |
           APPIMAGE=$(find "$GITHUB_WORKSPACE/audacity/build.artifacts" -name '*.AppImage' -print -quit)
-          echo "AppImage: $APPIMAGE"
-          if [ -z "$APPIMAGE" ]; then echo "!! BRAK AppImage w build.artifacts"; exit 1; fi
+          if [ -z "$APPIMAGE" ]; then echo "!! BRAK AppImage"; exit 1; fi
           file "$APPIMAGE"
           cd /tmp
-          "$APPIMAGE" --appimage-extract >/dev/null 2>&1 && echo "Extract OK" || echo "Extract warning"
+          "$APPIMAGE" --appimage-extract >/dev/null 2>&1
           BIN=$(find /tmp/squashfs-root -type f -name 'audacity4portable*' -path '*bin*' -print -quit)
-          if [ -n "$BIN" ]; then echo "BIN: $BIN"; file "$BIN"; else echo "!! brak audacity4portable* w AppImage"; exit 1; fi
+          [ -n "$BIN" ] || { echo "!! brak binarki"; exit 1; }
+          file "$BIN"
 
-      - name: 'Wyślij artefakt (AppImage)'
+      - name: 'Wyślij artefakt'
         uses: actions/upload-artifact@v7
         with:
           name: audacity-pi5-aarch64
           path: audacity/build.artifacts/
           retention-days: 14
 
-      - name: 'Opublikuj draft Release'
+      - name: 'Utwórz Release'
         if: github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: pi5-${{ github.event.inputs.audacity_ref }}
           name: 'Audacity ${{ github.event.inputs.audacity_ref }} — Raspberry Pi 5 (aarch64)'
           draft: true
-          body: |
-            ## Audacity 4 Beta — build zoptymalizowany pod Raspberry Pi 5
-
-            **Build wykonany w chmurze** na natywnym runnerze arm64 GitHub Actions (`ubuntu-24.04-arm`).
-
-            - Architektura: **aarch64 (arm64)**, target: **Cortex-A76** (BCM2712)
-            - Flagi: `-mcpu=cortex-a76 -O3 -pipe -fomit-frame-pointer`${{ github.event.inputs.lto == 'on' && ' + LTO' || '' }} (bez `-fopenmp` — błąd upstream w SpectrumCache.cpp)
-            - Qt 6.10.1 · GCC (systemowy) · CMake + Ninja · ccache
-            - Page size: **4K** (domyślny kernel Raspberry Pi OS — brak flag potrzebnych)
-
-            ### Instalacja na Pi
-            ```bash
-            chmod +x Audacity*.AppImage
-            ./Audacity*.AppImage            # uruchomienie
-            # albo bez FUSE:
-            ./Audacity*.AppImage --appimage-extract-and-run
-            ```
-
-            ### Parametry buildu
-            - Ref Audacity: `${{ github.event.inputs.audacity_ref }}`
-            - Tryb: `${{ github.event.inputs.build_mode }}`
-            - LTO: `${{ github.event.inputs.lto }}`
           files: audacity/build.artifacts/*.AppImage

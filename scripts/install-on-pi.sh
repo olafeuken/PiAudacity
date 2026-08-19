@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-# ============================================================================
-# Instalacja Audacity 4 Beta (build Pi5) na Raspberry Pi z GitHub Release
-# Pobiera najnowszy draft Release z repo olafeuken/PiAudacity, instaluje
-# AppImage do ~/.local/bin i tworzy wpis w menu KDE Plasma.
-# Uruchomienie:  bash scripts/install-on-pi.sh
-# ============================================================================
+# Instalacja Audacity 4 (build aarch64) z GitHub Release.
 set -euo pipefail
 
 REPO="olafeuken/PiAudacity"
@@ -15,23 +10,18 @@ ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-echo "==> Pobieranie informacji o release z GitHub ($REPO) ..."
+echo "==> Pobieranie najnowszego Release ..."
 FILE=""
-# gh CLI (tylko jeśli token faktycznie działa) — obsługuje też draft Release
-# (drafty nie dają publicznego browser_download_url, dlatego pobieramy przez API)
 if command -v gh >/dev/null 2>&1 && gh api user >/dev/null 2>&1; then
-  FILE="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .name' | head -1)"
+  FILE="$(gh api "repos/$REPO/releases" --jq '.[0].assets[] | select(.name | endswith(".AppImage")) | .name' | head -1)"
   if [ -n "$FILE" ]; then
-    ASSET_ID="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .id' | head -1)"
-    echo "==> Pobieranie (gh, draft-safe): $FILE"
+    ASSET_ID="$(gh api "repos/$REPO/releases" --jq '.[0].assets[] | select(.name | endswith(".AppImage")) | .id' | head -1)"
     gh api -H "Accept: application/octet-stream" "repos/$REPO/releases/assets/$ASSET_ID" > "$TMP_DIR/$FILE"
   fi
 fi
 
-# Fallback: publiczny URL (release opublikowany / brak gh)
 if [ -z "$FILE" ] || [ ! -s "$TMP_DIR/$FILE" ]; then
-  ASSET_URL="$(curl -s "https://api.github.com/repos/$REPO/releases" \
-    | python3 -c '
+  ASSET_URL="$(curl -s "https://api.github.com/repos/$REPO/releases" | python3 -c '
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -43,13 +33,12 @@ except Exception:
 ')"
   if [ -n "$ASSET_URL" ]; then
     FILE="$(basename "$ASSET_URL")"
-    echo "==> Pobieranie (curl): $ASSET_URL"
     curl -L --fail -o "$TMP_DIR/$FILE" "$ASSET_URL"
   fi
 fi
 
 if [ -z "$FILE" ] || [ ! -s "$TMP_DIR/$FILE" ]; then
-  echo "!! Nie znaleziono AppImage w release. Opublikuj najpierw draft Release (Actions)." >&2
+  echo "!! Nie znaleziono AppImage w release." >&2
   exit 1
 fi
 
@@ -57,13 +46,10 @@ echo "==> Instalacja do $BIN_DIR ..."
 mkdir -p "$BIN_DIR" "$APP_DIR" "$ICON_DIR"
 install -m 0755 "$TMP_DIR/$FILE" "$BIN_DIR/$APP_NAME.AppImage"
 
-# Wrapper: uruchamia AppImage (obsługuje brak FUSE przez --appimage-extract-and-run)
 cat > "$BIN_DIR/audacity" <<'EOF'
 #!/usr/bin/env bash
 APP="$HOME/.local/bin/Audacity.AppImage"
-# X11 (XWayland) — świadomy wybór: prebuilt Qt ma zepsuty plugin wayland, wiec X11 to szybka/pewna droga
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
-# Sprzetowy render (GPU V3D) — najlepsze wykorzystanie grafiki
 export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-gl}"
 if command -v fusermount3 >/dev/null 2>&1; then
   exec "$APP" "$@"
@@ -74,33 +60,25 @@ EOF
 chmod 0755 "$BIN_DIR/audacity"
 
 echo "==> Wpis w menu KDE ..."
-# Nazwa pliku MUSI być taka, jakiej szuka Audacity (desktopFileName) — inaczej
-# KWin pokazuje generyczną ikonę X11 w pasku tytułu okna XWayland.
 cat > "$APP_DIR/org.audacityteam.Audacity4portablenightly.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=Audacity 4 (Pi5)
 GenericName=Edytor dźwięku
-Comment=Audacity 4 (master) — build aarch64 pod Raspberry Pi 5
+Comment=Audacity 4 — build aarch64 pod Raspberry Pi 5
 Exec=$BIN_DIR/audacity %F
 Icon=audacity
 Terminal=false
 Categories=AudioVideo;Audio;AudioEditing;
 StartupWMClass=audacity4portablenightly
 EOF
-# Usuń ewentualny stary wpis o innej nazwie (duplikat w menu)
 rm -f "$APP_DIR/audacity.desktop"
 
-# Ikona aplikacji (z oficjalnego repo Audacity)
 curl -sL --fail -o "$ICON_DIR/audacity.svg" \
-  "https://raw.githubusercontent.com/audacity/audacity/master/buildscripts/packaging/Linux%2BBSD/aup4.svg" \
-  || true
+  "https://raw.githubusercontent.com/audacity/audacity/master/buildscripts/packaging/Linux%2BBSD/aup4.svg" || true
 
-# Odświeżenie baz KDE
 if command -v kbuildsycoca6 >/dev/null 2>&1; then kbuildsycoca6 >/dev/null 2>&1 || true; fi
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then gtk-update-icon-cache -f "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true; fi
 
 echo ""
-echo "OK. Uruchomienie:"
-echo "    audacity"
-echo "albo z menu KDE:  Audacity 4 (Pi5)"
+echo "OK. Uruchomienie: audacity"
