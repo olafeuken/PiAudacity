@@ -63,6 +63,8 @@ cat > "$BIN_DIR/audacity" <<'EOF'
 APP="$HOME/.local/bin/Audacity.AppImage"
 # Natywny Wayland (KDE Plasma 6); ';xcb' = automatyczny fallback do XWayland gdy wayland nie zadziala
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
+# Sprzetowy render QML (GPU V3D) — najlepsze wykorzystanie grafiki; brak GL = auto fallback
+export QT_QUICK_BACKEND="${QT_QUICK_BACKEND:-gl}"
 if command -v fusermount3 >/dev/null 2>&1; then
   exec "$APP" "$@"
 else
