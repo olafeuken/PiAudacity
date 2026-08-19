@@ -16,12 +16,21 @@ TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "==> Pobieranie informacji o release z GitHub ($REPO) ..."
-# gh CLI (jeśli zalogowany) albo curl do API
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+# gh CLI (tylko jeśli token faktycznie działa) albo curl do API
+if command -v gh >/dev/null 2>&1 && gh api user >/dev/null 2>&1; then
   ASSET_URL="$(gh api "repos/$REPO/releases" --jq '[.[] | select(.draft==true or .prerelease==true)][0].assets[] | select(.name | endswith(".AppImage")) | .browser_download_url' | head -1)"
 else
   ASSET_URL="$(curl -s "https://api.github.com/repos/$REPO/releases" \
-    | python3 -c 'import sys,json; d=json.load(sys.stdin); print(next((a["browser_download_url"] for r in d for a in r.get("assets",[]) if a["name"].endswith(".AppImage")), ""))')"
+    | python3 -c '
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    if not isinstance(d, list):
+        d = []
+    print(next((a["browser_download_url"] for r in d for a in r.get("assets", []) if a["name"].endswith(".AppImage")), ""))
+except Exception:
+    print("")
+')"
 fi
 
 if [ -z "$ASSET_URL" ]; then
