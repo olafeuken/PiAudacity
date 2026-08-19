@@ -76,6 +76,13 @@ jobs:
           submodules: recursive
           path: audacity
 
+      - name: 'Pobierz nasze skrypty (PiAudacity)'
+        uses: actions/checkout@v7
+        with:
+          path: piaudacity
+        # Nasz repo zawiera scripts/build-qt-a76.sh — workflow pobiera tylko audacity/audacity,
+        # więc bez tego checkoutu skrypt nie istnieje na runnerze (błąd: No such file).
+
       # ------------------------------------------------------------------
       # Optymalizacja pod Cortex-A76 (Raspberry Pi 5 / BCM2712)
       #   -mcpu=cortex-a76  = armv8.2-a + crc + lse + fp16 + dotprod + rcpc + tuning A76
@@ -139,7 +146,7 @@ jobs:
 
       - name: 'Buduj Qt 6.10.1 ze źródeł (Wayland + A76)'
         run: |
-          bash scripts/build-qt-a76.sh
+          bash piaudacity/scripts/build-qt-a76.sh
           QP="$HOME/Qt/6.10.1/gcc_arm64"
           {
             echo "Qt6_DIR=$QP"
