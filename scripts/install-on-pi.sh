@@ -61,6 +61,8 @@ install -m 0755 "$TMP_DIR/$FILE" "$BIN_DIR/$APP_NAME.AppImage"
 cat > "$BIN_DIR/audacity" <<'EOF'
 #!/usr/bin/env bash
 APP="$HOME/.local/bin/Audacity.AppImage"
+# Natywny Wayland (KDE Plasma 6); ';xcb' = automatyczny fallback do XWayland gdy wayland nie zadziala
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-wayland;xcb}"
 if command -v fusermount3 >/dev/null 2>&1; then
   exec "$APP" "$@"
 else
