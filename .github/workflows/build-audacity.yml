@@ -136,13 +136,8 @@ jobs:
           arch: 'linux_gcc_arm64'
           modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets qtgraphs qtquick3d'
           cache: true
-
-      - name: 'Ustaw QT_ROOT_DIR / Qt6_DIR'
-        run: |
-          QT_ROOT=$(find "$HOME/Qt" -maxdepth 2 -type d -name 'gcc_arm64' -print -quit)
-          echo "QT_ROOT_DIR=$QT_ROOT" >> "$GITHUB_ENV"
-          echo "Qt6_DIR=$QT_ROOT" >> "$GITHUB_ENV"
-          echo "QT_ROOT=$QT_ROOT"
+        # UWAGA: install-qt-action SAM ustawia QT_ROOT_DIR / Qt6_DIR / QT_PLUGIN_PATH /
+        # LD_LIBRARY_PATH / PKG_CONFIG_PATH — nie dodawać własnego kroku z find $HOME/Qt.
 
       - name: 'Przygotuj build_tools/environment.sh (oficjalny setup.sh pominięty — x86-only)'
         run: |
